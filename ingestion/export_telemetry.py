@@ -1,5 +1,4 @@
 import argparse
-import logging
 from pathlib import Path
 from ingestion.config import (
     DATA_DIR,
@@ -31,15 +30,12 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     output_file = args.output_dir / "telemetry_sync.csv"
 
-    logging.info(f"Extracting telemetry: {args.driver_a} vs {args.driver_b} ({args.gp} {args.year})")
-
     df_a = fetch_driver_fastest_lap(args.year, args.gp, args.session, args.driver_a)
     df_b = fetch_driver_fastest_lap(args.year, args.gp, args.session, args.driver_b)
 
     synced_df = synchronize_laps(df_a, df_b, args.driver_a, args.driver_b)
 
     synced_df.to_csv(output_file, index=False)
-    logging.info(f"Successfully exported {len(synced_df)} synchronized spatial data points to {output_file}")
 
 
 if __name__ == "__main__":
