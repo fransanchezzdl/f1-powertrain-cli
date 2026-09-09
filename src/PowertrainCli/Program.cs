@@ -26,22 +26,33 @@ for (int i = 0; i < args.Length; i++)
 
 bool isInteractive = args.Length == 0 || args.Contains("--interactive");
 
-bool RunIngestion(int yr, string grandPrix, string sess, string dA, string dB, string outputCsv)
+async Task<bool> RunIngestionWithSpinner(int yr, string grandPrix, string sess, string dA, string dB, string outputCsv)
 {
-    Console.WriteLine($"\n[Ingestion] Fetching telemetry for {dA} vs {dB} ({grandPrix} {yr} [{sess}])...");
-    
     var outputDir = Path.GetDirectoryName(outputCsv);
     if (string.IsNullOrEmpty(outputDir)) outputDir = "/app/data";
 
     var psi = new ProcessStartInfo
     {
         FileName = "python",
-        Arguments = $"-m ingestion.export_telemetry --year {yr} --gp \"{grandPrix}\" --session \"{sess}\" --driver-a \"{dA}\" --driver-b \"{dB}\" --output-dir \"{outputDir}\"",
         RedirectStandardOutput = true,
         RedirectStandardError = true,
         UseShellExecute = false,
         WorkingDirectory = "/app"
     };
+    psi.ArgumentList.Add("-m");
+    psi.ArgumentList.Add("ingestion.export_telemetry");
+    psi.ArgumentList.Add("--year");
+    psi.ArgumentList.Add(yr.ToString());
+    psi.ArgumentList.Add("--gp");
+    psi.ArgumentList.Add(grandPrix);
+    psi.ArgumentList.Add("--session");
+    psi.ArgumentList.Add(sess);
+    psi.ArgumentList.Add("--driver-a");
+    psi.ArgumentList.Add(dA);
+    psi.ArgumentList.Add("--driver-b");
+    psi.ArgumentList.Add(dB);
+    psi.ArgumentList.Add("--output-dir");
+    psi.ArgumentList.Add(outputDir);
 
     try
     {
@@ -52,20 +63,41 @@ bool RunIngestion(int yr, string grandPrix, string sess, string dA, string dB, s
             return false;
         }
 
-        // Stream output in real time
-        proc.OutputDataReceived += (_, e) => { if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine($"  {e.Data}"); };
-        proc.ErrorDataReceived += (_, e) => { if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine($"  {e.Data}"); };
-        
-        proc.BeginOutputReadLine();
-        proc.BeginErrorReadLine();
-        proc.WaitForExit();
+        var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+        var stderrTask = proc.StandardError.ReadToEndAsync();
+        using var spinnerCancellation = new CancellationTokenSource();
+        string[] spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        var spinnerTask = Task.Run(async () =>
+        {
+            var frame = 0;
+            while (!spinnerCancellation.Token.IsCancellationRequested)
+            {
+                Console.Write($"\r[Ingestion] {spinnerFrames[frame++ % spinnerFrames.Length]} Fetching telemetry...");
+                try
+                {
+                    await Task.Delay(100, spinnerCancellation.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+        });
+
+        await proc.WaitForExitAsync();
+        spinnerCancellation.Cancel();
+        await spinnerTask;
+        string errorOutput = await stderrTask;
+        await stdoutTask;
+        Console.Write("\r" + new string(' ', 70) + "\r");
 
         if (proc.ExitCode != 0)
         {
-            Console.WriteLine($"[Error] Ingestion failed with exit code {proc.ExitCode}.");
+            Console.Error.WriteLine($"[Error] Ingestion failed with exit code {proc.ExitCode}: {errorOutput.Trim()}");
             return false;
         }
 
+        Console.WriteLine($"[✔] Ingestion complete: {dA} vs {dB} ({grandPrix} {yr} [{sess}]).");
         return true;
     }
     catch (Exception ex)
@@ -117,7 +149,7 @@ if (!isInteractive)
 {
     if (autoFetch)
     {
-        bool ok = RunIngestion(year, gp, session, driverA, driverB, csvPath);
+        bool ok = await RunIngestionWithSpinner(year, gp, session, driverA, driverB, csvPath);
         if (!ok) return 1;
     }
     ExecuteAnalysis(csvPath, driverA, driverB);
@@ -125,9 +157,8 @@ if (!isInteractive)
 }
 
 // 2. Interactive REPL Mode
-Console.WriteLine("================================================================================");
-Console.WriteLine(" F1 POWERTRAIN PERFORMANCE ANALYZER - INTERACTIVE REPL");
-Console.WriteLine(" Commands: 'compare' (fetch & analyze), 'analyze' (cached CSV only), 'exit'");
+Console.WriteLine(AsciiTableFormatter.Banner);
+Console.WriteLine("Commands: compare (fetch & analyze), analyze (cached CSV only), exit");
 Console.WriteLine("================================================================================");
 
 while (true)
@@ -164,7 +195,7 @@ while (true)
         string? dbInput = Console.ReadLine()?.Trim();
         string targetDb = string.IsNullOrEmpty(dbInput) ? "PIA" : dbInput.ToUpperInvariant();
 
-        bool success = RunIngestion(targetYear, targetGp, targetSession, targetDa, targetDb, csvPath);
+        bool success = await RunIngestionWithSpinner(targetYear, targetGp, targetSession, targetDa, targetDb, csvPath);
         if (success)
         {
             ExecuteAnalysis(csvPath, targetDa, targetDb);

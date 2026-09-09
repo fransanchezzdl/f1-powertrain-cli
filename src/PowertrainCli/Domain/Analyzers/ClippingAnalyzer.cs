@@ -4,7 +4,12 @@ namespace PowertrainCli.Domain.Analyzers;
 
 public class ClippingAnalyzer
 {
-    public IReadOnlyList<ClippingEvent> DetectClipping(IReadOnlyList<TelemetrySample> samples, string driverCode, bool isDriverA, double speedDropThreshold = 2.5)
+    public IReadOnlyList<ClippingEvent> DetectClipping(
+        IReadOnlyList<TelemetrySample> samples,
+        string driverCode,
+        bool isDriverA,
+        double speedDropThreshold = 3.5,
+        double minSpeedThreshold = 285.0)
     {
         var events = new List<ClippingEvent>();
         int i = 0;
@@ -15,16 +20,16 @@ public class ClippingAnalyzer
             if (throttle >= 98.0)
             {
                 int startIdx = i;
-                double maxSpeed = isDriverA ? samples[i].SpeedA : samples[i].SpeedB;
+                double maxSpeed = double.MinValue;
 
                 while (i < samples.Count && (isDriverA ? samples[i].ThrottleA : samples[i].ThrottleB) >= 98.0)
                 {
                     double currentSpeed = isDriverA ? samples[i].SpeedA : samples[i].SpeedB;
                     if (currentSpeed > maxSpeed)
                         maxSpeed = currentSpeed;
-                    
+
                     double drop = maxSpeed - currentSpeed;
-                    if (drop >= speedDropThreshold)
+                    if (maxSpeed >= minSpeedThreshold && drop >= speedDropThreshold)
                     {
                         events.Add(new ClippingEvent(
                             Driver: driverCode,
@@ -32,6 +37,9 @@ public class ClippingAnalyzer
                             EndDistanceMeters: Math.Round(samples[i].Distance, 1),
                             SpeedDropKmh: Math.Round(drop, 2)
                         ));
+
+                        while (i < samples.Count && (isDriverA ? samples[i].ThrottleA : samples[i].ThrottleB) >= 98.0)
+                            i++;
                         break;
                     }
                     i++;

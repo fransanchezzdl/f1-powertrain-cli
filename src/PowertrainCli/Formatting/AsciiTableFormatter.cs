@@ -4,6 +4,15 @@ namespace PowertrainCli.Formatting;
 
 public static class AsciiTableFormatter
 {
+    public const string Banner = """
+███████╗ ██╗
+██╔════╝███║
+█████╗  ╚██║
+██╔══╝   ██║
+██║      ██║
+╚═╝      ╚═╝ POWERTRAIN PERFORMANCE ANALYZER
+""";
+
     public static void PrintReport(
         string driverA,
         string driverB,
@@ -12,7 +21,8 @@ public static class AsciiTableFormatter
         PowertrainDeltaSummary deltas,
         IReadOnlyList<ClippingEvent> clippingEvents)
     {
-        Console.WriteLine("\n================================================================================");
+        Console.WriteLine(Banner);
+        Console.WriteLine("================================================================================");
         Console.WriteLine($"POWERTRAIN OPERATING ENVELOPE (WOT >= 98%): {driverA} vs {driverB}");
         Console.WriteLine("================================================================================");
         Console.WriteLine(string.Format("{0,-5} | {1,-14} | {2,-11} | {3,-14} | {4,-11}", "Gear", $"{driverA} Max V", $"{driverA} Avg RPM", $"{driverB} Max V", $"{driverB} Avg RPM"));
@@ -33,7 +43,7 @@ public static class AsciiTableFormatter
         }
 
         Console.WriteLine("\n================================================================================");
-        Console.WriteLine($"FULL THROTTLE ACCELERATION SUMMARY (DRS CLOSED)");
+        Console.WriteLine("FULL THROTTLE ACCELERATION SUMMARY (DRS CLOSED)");
         Console.WriteLine("================================================================================");
         Console.WriteLine($"Mean Speed Delta ({driverA} - {driverB}): {deltas.MeanSpeedDeltaKmh:+0.00;-0.00;0.00} km/h");
         Console.WriteLine($"Max Speed Delta ({driverA} - {driverB}):  {deltas.MaxSpeedDeltaKmh:+0.00;-0.00;0.00} km/h");
@@ -44,13 +54,16 @@ public static class AsciiTableFormatter
         Console.WriteLine("================================================================================");
         if (clippingEvents.Count == 0)
         {
-            Console.WriteLine("No significant energy deployment decay detected before braking zones.");
+            Console.WriteLine("No significant high-speed energy deployment decay (> 3.5 km/h) detected.");
         }
         else
         {
-            foreach (var evt in clippingEvents)
+            Console.WriteLine(string.Format("{0,-8} | {1,-19} | {2,-13} | {3}", "Driver", "Track Interval", "Speed Decay", "Diagnostic"));
+            Console.WriteLine(new string('-', 70));
+            foreach (var evt in clippingEvents.OrderByDescending(x => x.SpeedDropKmh).Take(5))
             {
-                Console.WriteLine($"[{evt.Driver}] Speed drop of {evt.SpeedDropKmh:F2} km/h from {evt.StartDistanceMeters:F0}m to {evt.EndDistanceMeters:F0}m under sustained 100% Throttle.");
+                string interval = $"{evt.StartDistanceMeters:F0}m -> {evt.EndDistanceMeters:F0}m";
+                Console.WriteLine(string.Format("{0,-8} | {1,-19} | {2,-13} | {3}", evt.Driver, interval, $"-{evt.SpeedDropKmh:F1} km/h", "MGU-K Depletion"));
             }
         }
         Console.WriteLine("================================================================================\n");
