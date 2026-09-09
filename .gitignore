@@ -1,0 +1,19 @@
+# Build & Environments
+bin/
+obj/
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+
+# Runtime Cache & Telemetry Exports
+cache/
+data/
+*.csv
+*.parquet
+
+# OS & IDE artifacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
