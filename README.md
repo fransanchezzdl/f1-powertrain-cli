@@ -9,9 +9,11 @@
 ╚═╝      ╚═╝ POWERTRAIN PERFORMANCE ANALYZER
 ```
 
-A telemetry comparison CLI for investigating Formula 1 power-unit performance. It combines a Python 3.11 FastF1 ingestion layer with a .NET 8 analytical engine in a multi-stage Docker image.
+A telemetry comparison CLI for investigating Formula 1 power-unit performance. 
 
-See [INSTRUCTIONS.md](INSTRUCTIONS.md) for Docker build, interactive REPL, and scriptable execution commands.
+*Developed by Francisco Sánchez de León Acevedo*
+
+>See [INSTRUCTIONS.md](INSTRUCTIONS.md) for Docker build, interactive REPL, and scriptable execution commands.
 
 ## Architecture
 
